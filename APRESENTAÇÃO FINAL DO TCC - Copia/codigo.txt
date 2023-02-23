@@ -1,0 +1,326 @@
+# Bibliotecas necessarias para o desenvolvimento.
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns 
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfTransformer
+from sklearn import feature_extraction, linear_model, model_selection, preprocessing
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+
+# Carregando as bases de dados, nas variaveis Fake e True.
+
+fake = pd.read_csv("C:/Users/Lucas Monteiro/Downloads/modelo_preditivo_TCC2/Fake.csv")
+true = pd.read_csv("C:/Users/Lucas Monteiro/Downloads/modelo_preditivo_TCC2/True.csv")
+
+# Analisando o tamanho da base Fake.
+fake.shape
+
+# Analisando o tamanho da base True
+true.shape
+
+# Enxergando o dataframe com suas respectivas linhas e colunas
+
+true.head()
+
+# Adicionando uma coluna "Target" para Fake e True
+
+# Add flag to track fake and real
+fake['target'] = 'fake'
+true['target'] = 'true'
+
+# Analisando novamente o dataframe com a nova coluna Target
+true.head()
+
+# Fazendo a concatenação das duas tabelas Fake e True
+
+# Concatenando as duas tabelas na variavel data e analise o seu shape
+data = pd.concat([fake, true]).reset_index(drop = True)
+data.shape
+
+# Colocando os indices de forma aleatoria utilizando o shuffle e resetando os indicies que estavam na tabela anterior.
+# Se não embaralhar, seria levado a um desvio padrão, podendo pegar somente true ou somente fake, enviezando o modelo.
+# desse modo gera um conjunto mais diversificado.
+from sklearn.utils import shuffle
+data = shuffle(data)
+data = data.reset_index(drop=True)
+
+# Conferindo o resultado
+data.head()
+
+# Removendo a coluna Data, assim o modelo se torna mais assertivo devido a padronização das informações.
+
+# Removendo a coluna data e analisando novamente o dataframe
+data.drop(["date"],axis=1,inplace=True)
+data.head()
+
+# Removendo a coluna Titulo, fazendo a limpeza e tratamento, para assim o modelo se tornar mais assertivo.
+
+# Removendo a coluna titulo e analisando novamente o dataframe
+data.drop(["title"],axis=1,inplace=True)
+data.head()
+
+# Transformando todas as palavras em minúsculos, continuando o processo de tratamento de limpeza dos dados para assertividade dos modelos. 
+
+# Convertendo as informações da coluna Texto para minúsculos, para não haver diferença nas informações 
+# E analisando novamente o dataframe
+
+data['text'] = data['text'].apply(lambda x: x.lower())
+data.head()
+
+# Removendo as pontuações, continuando o processo de tratamento e limpeza do dados para assim o modelo se torna mais assertivo.
+
+# Removendo os pontos nos textos.
+# usando a função punctuation_removal recebendo como parametro o texto.
+# usando a variavel clean_str recebe as informações da variavel all_list sem pontuações e separando-os por ''
+
+import string
+
+def punctuation_removal(text):
+    all_list = [char for char in text if char not in string.punctuation]
+    clean_str = ''.join(all_list)
+    return clean_str
+
+data['text'] = data['text'].apply(punctuation_removal)
+
+# Analisando as mudanças que foram feitas no dataframe, após a limpeza e tratamento dos dados.
+data.head()
+
+# Usando a biblioteca nltk para remover os stopwords. 
+# São palavras que podem ser consideradas irrelevantes para o conjunto de resultados a ser exibido
+
+# Removendo os stopwords que são palavras condideradas não importantes para a analise dos textos.
+import nltk
+nltk.download('stopwords')
+from nltk.corpus import stopwords
+stop = stopwords.words('english')
+
+data['text'] = data['text'].apply(lambda x: ' '.join([word for word in x.split() if word not in (stop)]))
+
+# Analisando o dataframe após a remoção do stopwords
+data.head()
+
+# Analisando  a quantidade de assunto por topicos
+
+# Quantidade de assunto por seus respectivos topicos 
+print(data.groupby(['subject'])['text'].count())
+data.groupby(['subject'])['text'].count().plot(kind="bar")
+plt.show()
+
+# Analisando a quantidade de assuntos Fake e True.
+# Fake:  23481 assuntos falsos
+# True:  21417 assuntos verdadeiros
+
+# Quantidade de assunto falsos e verdadeiros
+print(data.groupby(['target'])['text'].count())
+data.groupby(['target'])['text'].count().plot(kind="bar")
+plt.show()
+
+# Utilizando a biblioteca WordCloud para criar uma nuvem de palavras.
+
+# Usando a biblioteca de WordCloud para criar uma nuvem de palavras do dataset fake.
+from wordcloud import WordCloud
+
+fake_data = data[data["target"] == "fake"]
+all_words = ' '.join([text for text in fake_data.text])
+
+wordcloud = WordCloud(width= 800, height= 500,
+                          max_font_size = 110,
+                          collocations = False).generate(all_words)
+
+plt.figure(figsize=(10,7))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis("off")
+plt.show()
+
+# Usando a biblioteca de WordCloud para criar uma nuvem de palavras do dataset true.
+from wordcloud import WordCloud
+
+real_data = data[data["target"] == "true"]
+all_words = ' '.join([text for text in fake_data.text])
+
+wordcloud = WordCloud(width= 800, height= 500,
+                          max_font_size = 110,
+                          collocations = False).generate(all_words)
+
+plt.figure(figsize=(10,7))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis("off")
+plt.show()
+
+# Contando as palavras utilizadas com mais frequencias 
+
+# Utilizando a biblioteca para fazer uma contagem das palavras usadas com mais frequencia.
+from nltk import tokenize
+
+token_space = tokenize.WhitespaceTokenizer()
+
+def counter(text, column_text, quantity):
+    all_words = ' '.join([text for text in text[column_text]])
+    token_phrase = token_space.tokenize(all_words)
+    frequency = nltk.FreqDist(token_phrase)
+    df_frequency = pd.DataFrame({"Word": list(frequency.keys()),
+                                   "Frequency": list(frequency.values())})
+    df_frequency = df_frequency.nlargest(columns = "Frequency", n = quantity)
+    plt.figure(figsize=(12,8))
+    ax = sns.barplot(data = df_frequency, x = "Word", y = "Frequency", color = 'blue')
+    ax.set(ylabel = "Count")
+    plt.xticks(rotation='vertical')
+    plt.show()
+
+# Palavras mais utilizadas na basa de dados Fake
+
+# Exibindo as palavras mais utilizadas da base de dados Fake
+counter(data[data["target"] == "fake"], "text", 20)
+
+# Exibindo as palavras mais utilizadas da base de dados True
+counter(data[data["target"] == "true"], "text", 20)
+
+# Função para plotar a matrix de confusão 
+
+# Função para fazer o plot da matrix de confusão  
+from sklearn import metrics
+import itertools
+
+def plot_confusion_matrix(cm, classes,
+                          normalize=False,
+                          title='Confusion matrix',
+                          cmap=plt.cm.Blues):
+    
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i, j],
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+
+# Dividindo a feature Text para X_traino e X_Teste, para o modelo começar a aprender
+
+# Dividindo a coluna texto com 80% para teste e 20% para treinar no modelo.
+X_train,X_test,y_train,y_test = train_test_split(data['text'], data.target, test_size=0.2, random_state=42)
+
+# Utilizando o modelo Logistic Regression  e aplicando o TF-IDF 
+# Term Frequency ou em português Frequência do Termo.
+# IDF é Inverse Document Frequency ou em português frequência inversa dos documentos.
+
+# Aplicando o algoritomo Logistic Regression e o TF-IDF.
+# Que é responsavel por analisar a frequência com que o termo aparece no documento ou texto.
+# Quanto maior for a sua frequencia, maior a sua importancia.
+from sklearn.linear_model import LogisticRegression
+
+pipe = Pipeline([('vect', CountVectorizer()),
+                 ('tfidf', TfidfTransformer()),
+                 ('model', LogisticRegression())])
+
+# Ajustando o modelo
+model = pipe.fit(X_train, y_train)
+
+# Accuracy do Modelo
+prediction = model.predict(X_test)
+print("accuracy: {}%".format(round(accuracy_score(y_test, prediction)*100,2)))
+
+# Aplicando a matriz de confusão para avaliar o desempenho do modelo.
+
+cm = metrics.confusion_matrix(y_test, prediction)
+plot_confusion_matrix(cm, classes=['Fake', 'Real'])
+
+# Aplicando o algoritmo DecisionTree ou Arvore de Decisão 
+
+from sklearn.tree import DecisionTreeClassifier
+
+
+pipe = Pipeline([('vect', CountVectorizer()),
+                 ('tfidf', TfidfTransformer()),
+                 ('model', DecisionTreeClassifier(criterion= 'entropy',
+                                           max_depth = 20, 
+                                           splitter='best', 
+                                           random_state=42))])
+
+model = pipe.fit(X_train, y_train)
+
+prediction = model.predict(X_test)
+print("accuracy: {}%".format(round(accuracy_score(y_test, prediction)*100,2)))
+
+# Aplicando a matriz de confusão para avaliar o desempenho do algoritmo DecisionTree
+
+cm = metrics.confusion_matrix(y_test, prediction)
+plot_confusion_matrix(cm, classes=['Fake', 'Real'])
+
+# Aplicando o algoritmo DecisionTree ou Arvore de Decisão Random Forest ou Floresta Aleatoria
+
+from sklearn.ensemble import RandomForestClassifier
+
+pipe = Pipeline([('vect', CountVectorizer()),
+                 ('tfidf', TfidfTransformer()),
+                 ('model', RandomForestClassifier(n_estimators=50, criterion="entropy"))])
+
+model = pipe.fit(X_train, y_train)
+prediction = model.predict(X_test)
+print("accuracy: {}%".format(round(accuracy_score(y_test, prediction)*100,2)))
+
+# Aplicando a matriz de confusão para avaliar o desempenho do algoritmo Random Forest
+
+cm = metrics.confusion_matrix(y_test, prediction)
+plot_confusion_matrix(cm, classes=['Fake', 'Real'])
+
+sns.heatmap(cm,annot=True, fmt="d")
+
+from sklearn.metrics import classification_report,f1_score,precision_score,average_precision_score,recall_score,accuracy_score
+
+cr = classification_report(y_test,prediction,labels=[0,1])
+print(cr)
+
+# F1-Score
+
+f1_macro = f1_score(y_test,prediction,average='macro')
+print("F1 Macro score = {:0.2f}%".format(f1_macro*100))
+
+f1_wei = f1_score(y_test,prediction,average='weighted')
+print("F1 Weighted score = {:0.2f}%".format(f1_wei*100))
+
+# Precision score
+
+precisao_macro = precision_score(y_test,prediction,average='macro')
+print("Precision score = {:0.2f}%".format(precisao_macro*100))
+
+precisao_wei = precision_score(y_test,prediction,average='weighted')
+print("Precision score = {:0.2f}%".format(precisao_wei*100))
+
+# Recall score
+
+rec_macro = recall_score(y_test,prediction,average='macro')
+print("Recall score Macro = {:0.2f}%".format(rec_macro*100))
+
+rec_wei = recall_score(y_test,prediction,average='weighted')
+print("Recall score Weighted = {:0.2f}%".format(rec_wei*100))
+
+# Accuracy score
+
+acc = accuracy_score(y_test,prediction)
+print("Accuracy score = {:0.2f}%".format(acc*100))
+
+from sklearn.tree import plot_tree
+
+estimator = model.estimators_[5]
+plt.figure(figsize=(35,30))
+plot_tree(estimator,filled=True,node_ids=True,rounded=True);
+
